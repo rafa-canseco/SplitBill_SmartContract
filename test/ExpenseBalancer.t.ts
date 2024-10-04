@@ -7,7 +7,6 @@ describe("ExpenseBalancer", function () {
   let addr1: any;
   let addr2: any;
   let addr3: any;
-  let mockStablecoin: any;
 
   beforeEach(async function () {
     [owner, addr1, addr2, addr3] = await ethers.getSigners();
@@ -19,42 +18,40 @@ describe("ExpenseBalancer", function () {
   });
 
   describe("createSession", function () {
-    it("Should create a session", async function () {
-      const sessionId = 1;
+    it("Should create a session and emit SessionCreated event", async function () {
       const invitedParticipants = [addr1.address, addr2.address];
 
-      await expect(
-        expenseBalancer.createSession(sessionId, invitedParticipants)
-      )
+      await expect(expenseBalancer.createSession(invitedParticipants))
         .to.emit(expenseBalancer, "SessionCreated")
-        .withArgs(sessionId, owner.address, invitedParticipants);
-
-      const sessionExists = await expenseBalancer.sessions(sessionId);
-      expect(sessionExists.exists).to.be.true;
+        .withArgs(1, owner.address, invitedParticipants);
     });
-    it("Should not allow creating a session with an existing ID", async function () {
-      const sessionId = 1;
-      const invitedParticipants = [await addr1.getAddress(), await addr2.getAddress()];
 
-      await expenseBalancer.createSession(sessionId, invitedParticipants);
+    it("Should create multiple sessions with incrementing IDs", async function () {
+      const invitedParticipants = [addr1.address, addr2.address];
 
-      await expect(expenseBalancer.createSession(sessionId, invitedParticipants))
-        .to.be.revertedWith("Session with this ID already exists");
+      await expect(expenseBalancer.createSession(invitedParticipants))
+        .to.emit(expenseBalancer, "SessionCreated")
+        .withArgs(1, owner.address, invitedParticipants);
+
+      await expect(expenseBalancer.createSession(invitedParticipants))
+        .to.emit(expenseBalancer, "SessionCreated")
+        .withArgs(2, owner.address, invitedParticipants);
     });
-     });
+  });
+
   describe("joinSession", function () {
-    const sessionId = 1;
-    let invitedParticipants: string[];
+    let sessionId: number;
 
     beforeEach(async function () {
-      invitedParticipants = [await addr1.getAddress(), await addr2.getAddress()];
-      await expenseBalancer.createSession(sessionId, invitedParticipants);
+      const invitedParticipants = [addr1.address, addr2.address];
+      await expenseBalancer.createSession(invitedParticipants);
+      sessionId = 1; // Assuming this is the first session
     });
 
     it("Should allow invited participants to join", async function () {
       await expect(expenseBalancer.connect(addr1).joinSession(sessionId))
         .to.emit(expenseBalancer, "ParticipantJoined")
-        .withArgs(sessionId, await addr1.getAddress());
+        .withArgs(sessionId, addr1.address);
     });
 
     it("Should not allow non-invited participants to join", async function () {
@@ -72,17 +69,17 @@ describe("ExpenseBalancer", function () {
       await expenseBalancer.connect(addr1).joinSession(sessionId);
       await expect(expenseBalancer.connect(addr2).joinSession(sessionId))
         .to.emit(expenseBalancer, "SessionStateChanged")
-        .withArgs(sessionId, 1); 
+        .withArgs(sessionId, 1); // 1 represents SessionState.Active
     });
   });
 
   describe("allParticipantsJoined", function () {
-    const sessionId = 1;
-    let invitedParticipants: string[];
+    let sessionId: number;
 
     beforeEach(async function () {
-      invitedParticipants = [await addr1.getAddress(), await addr2.getAddress()];
-      await expenseBalancer.createSession(sessionId, invitedParticipants);
+      const invitedParticipants = [addr1.address, addr2.address];
+      await expenseBalancer.createSession(invitedParticipants);
+      sessionId = 1; // Assuming this is the first session
     });
 
     it("Should return false when not all participants have joined", async function () {
@@ -96,5 +93,16 @@ describe("ExpenseBalancer", function () {
       expect(await expenseBalancer.allParticipantsJoined(sessionId)).to.be.true;
     });
   });
-  });
 
+  describe("sessionExists", function () {
+    it("Should return false for non-existent session", async function () {
+      expect(await expenseBalancer.sessionExists(1)).to.be.false;
+    });
+
+    it("Should return true for existing session", async function () {
+      const invitedParticipants = [addr1.address, addr2.address];
+      await expenseBalancer.createSession(invitedParticipants);
+      expect(await expenseBalancer.sessionExists(1)).to.be.true;
+    });
+  });
+});

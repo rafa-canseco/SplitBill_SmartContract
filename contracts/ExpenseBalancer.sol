@@ -18,6 +18,7 @@ contract ExpenseBalancer is ReentrancyGuard, Ownable {
         bool exists;
     }
 
+    uint256 private sessionCounter;
     mapping(uint256 => Session) public sessions;
 
     event SessionCreated(uint256 indexed sessionId, address creator, address[] invitedParticipants);
@@ -30,18 +31,26 @@ contract ExpenseBalancer is ReentrancyGuard, Ownable {
         stablecoin = IERC20(_stablecoinAddress);
     }
 
-    function createSession(uint256 _sessionId,address[] memory _invitedParticipants) external {
-        require(!sessions[_sessionId].exists, "Session with this ID already exists");
-
-        Session storage newSession = sessions[_sessionId];
+    function createSession(address[] memory _invitedParticipants) external returns (uint256) {
+        uint256 newSessionId = sessionCounter + 1;
+        require(!sessions[newSessionId].exists, "Session creation failed");
+    
+        Session storage newSession = sessions[newSessionId];
         newSession.creator = msg.sender;
         newSession.invitedParticipants = _invitedParticipants;
         newSession.state = SessionState.Pending;
         newSession.exists = true;
-
+    
         newSession.confirmedParticipants[msg.sender] = true;
-
-        emit SessionCreated(_sessionId, msg.sender, _invitedParticipants);
+    
+        sessionCounter = newSessionId;
+    
+        emit SessionCreated(newSessionId, msg.sender, _invitedParticipants);
+        return newSessionId;
+    }
+    
+    function sessionExists(uint256 _sessionId) public view returns (bool) {
+        return sessions[_sessionId].exists;
     }
 
     function joinSession(uint256 _sessionId) external {
